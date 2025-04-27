@@ -1,5 +1,5 @@
 <!--docs\etl\extract\extract_geospatial_file.md-->
-PROCEDURE
+
 
 
 Extract Geospatial File
@@ -18,18 +18,26 @@ Parameters
 
 Returns
 -------
-geopandas.GeoDataFrame
+```GeoDataFrame```  
 
 
 Function 
 -------- 
   
 ``` 
+# DEPENDENCIES 
+
 # Use geopandas —
 import geopandas
 
+
+# PARAMETERS 
+
 # Given a file_path of string type —
 file_path: str
+
+
+# PROCESSING
 
 # Let gdf be a geodataframe —
 gdf = geopandas.GeoDataFrame()
@@ -40,7 +48,10 @@ gdf = read_file(file_path)
 # Convert geometries into Well-Known-Text —
 gdf = gdf.to_wkt() 
 
-# output the geodataframe — 
+
+# RETURN 
+
+# Return the geodataframe — 
 return gdf
 ```
 
