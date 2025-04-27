@@ -14,16 +14,16 @@ Parameters
 The `get_access_db` method requires the file paths to the source and sink datasets: 
 
 ``` mdb_path : str ```  
-- Absolute path to a Microsoft Access database file
+    Absolute path to a Microsoft Access database file
 
 ```db_path : str ```  
-- Absolute path to database file
+    Absolute path to database file
 
 <br>
 
 Returns
 -------
-```Dict```  
+```dict```  
     Key-Value dictionary of the number of rows inserted per table name 
 
 
@@ -42,6 +42,7 @@ from db_connect import connect_mdb
 # Use sqlalchemy for the sink connection — 
 from etl.extract import put_dataframe
 
+
 # PARAMETERS 
 
 # Given mdb_path a string for the absolute path to the source db — 
@@ -49,6 +50,7 @@ mdb_path : str
 
 # Given db_path a string for the absolute path to the sink db —  
 db_path : str  
+
 
 # INITIALISE 
 
@@ -61,6 +63,7 @@ record_count = int()
 # Declare results a dictionary recording results of the number of rows inserted per table — 
 results = dict() 
 
+
 # CONNECT 
 
 # Let mdb_conn be an Access database connection set from the given mdb_path string — 
@@ -72,7 +75,8 @@ mdb_cursor = mdb_conn.cursor()
 # Let mdb_tables be a list set from the schema of the Access database — 
 mdb_tables = mdb_cursor.tables(tableType='TABLE')
 
-# LOOP   
+
+# TABLE LOOP   
 
 # Loop through each table in the list — 
 for tbl in mdb_tables: 
@@ -86,13 +90,14 @@ for tbl in mdb_tables:
     # Let dataframe be a pandas dataframe to read the sql_statement to extract a table from the Access database — 
     dataframe = pandas.read_sql(sql_statement, mdb_conn)  
 
-    # OUTPUT 
+    # DATA STORE 
 
     # Store the dataframe by table_name using the given db_path — 
     row_count = put_dataframe(dataframe=dataframe, table_name=table_name, db_path=db_path) 
 
     # Record the result as number of rows inserted per table 
     results.update({table_name: row_count}) 
+
 
 # RETURN
 
