@@ -13,22 +13,22 @@ Use the `get_spreadsheet_body` method to extract counts and geographies from the
 Parameters
 ----------
 
-The `get_spreadsheet_body` method requires the names and file paths for the source and sink datasets, plus how many spreadsheet rows to skip to get to the beginning of the data table. 
+*The `get_spreadsheet_body` method requires the names and file paths for the source and sink datasets, plus how many spreadsheet rows to skip to get to the beginning of the data table.* 
 
-```sheet_name : str``` 
-- Name of the spreadsheet to be extracted from an excel workbook. 
+```sheet_name : str```  
+    Name of the spreadsheet to be extracted from an excel workbook. 
 
-```db_path : str```
-- Absolute path to database file that will collate the results. 
+```db_path : str```  
+    Absolute path to database file that will collate the results. 
 
-```file_path : str```
-- Absolute path to the Excel workbook containing the census results. 
+```file_path : str```  
+    Absolute path to the Excel workbook containing the census results. 
 
-```skiprows : int```
-- Number of rows to skip to beginning of data table. 
+```skiprows : int```  
+    Number of rows to skip to beginning of data table. 
 
-```table_name : str``` 
-- Name to be used when storing results as a database table.
+```table_name : str```  
+    Name to be used when storing results as a database table.
 
 <br>
 
@@ -44,6 +44,7 @@ from pandas import Dataframe, ExcelFile, read_excel
 # Use openpyxl —   
 from openpyxl import get column_letter 
 
+
 # PARAMETERS
 
 # Given sheet_name a string being the name of the worksheet to extract from an Excel workbook —  
@@ -58,9 +59,10 @@ skip_rows : int
 # Given table_name a string being the name to be used for the resulting database table — 
 table_name : str 
 
+
 # INITIALISE 
 
-# set table_name to lower case for consistency
+# Set table_name to lower case for consistency
 table_name.lower
 
 # Declare df to be a pandas DataFrame
@@ -87,8 +89,9 @@ dtype = 'object'
 # Let engine be set to openpyxl to work with the excel file
 engine = 'openpyxl' 
 
-# read excel worksheet into pandas dataframe —  
+# Read Excel worksheet into pandas dataframe —  
 df = pd.read_excel(io = io, sheet_name=sheet_name, skiprows=skiprows, header=header, dtype=dtype, engine=engine)
+
 
 # COLUMN LABELLING 
 
@@ -177,41 +180,6 @@ print(extract[1])
 
 <br>
 
-
-Inspect Results
----------------
-
-How to verify the `get_spreadsheet_body` method worked: 
-
-```python
-# libraries 
-from sqlalchemy import text 
-
-# modules 
-from src.db_connect import connect_db
-
-# connect to database 
-conn = connect_db(db_path=db_path)
-
-# sql statement for table names 
-qry = text("SELECT name FROM sqlite_schema WHERE type = 'table' AND lower(name) LIKE '%meshblock' ")
-
-# execute the sql statement 
-results = conn.execute(ods_qry)
-
-# inspect results 
-[print(tbl[0]) for tbl in results]
-```
-
-<br>
-
-
-### Results 
- 
-```
-tblGeogMeshBlock
-tblCountsMeshBlock
-```
-<br>
+QED
 
 ... 
