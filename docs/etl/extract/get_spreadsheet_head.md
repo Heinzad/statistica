@@ -13,9 +13,9 @@ Use the `extract_spreadsheet_head` method to extract question text embedded in t
 Parameters
 ----------
 
-The `extract_spreadsheet_head` method requires the names and file paths for the source and sink datasets. It requires further details on how many spreadsheet rows to skip to get to the beginning of the data table, and how many rows to extract from the pivot table headers. 
+*The `extract_spreadsheet_head` method requires the names and file paths for the source and sink datasets. It requires further details on how many spreadsheet rows to skip to get to the beginning of the data table, and how many rows to extract from the pivot table headers.* 
 
-The `extract_spreadsheet_head` method also requires supplementary details about the survey for which the questions were recorded. 
+*The `extract_spreadsheet_head` method also requires supplementary details about the survey for which the questions were recorded.* 
 
 ```sheet_name : str```  
     Name of the spreadsheet to be extracted from an excel workbook. 
@@ -42,7 +42,7 @@ The `extract_spreadsheet_head` method also requires supplementary details about 
 
 Returns
 -------
-pandas.DataFrame
+```DataFrame```  
 
 
 Function
@@ -53,6 +53,9 @@ Function
 
 # Use pandas — 
 import pandas
+
+# Use openpyxl —   
+from openpyxl import get column_letter 
 
 
 # INITIALISE 
@@ -87,7 +90,7 @@ dtype : str = 'object'
 # Let engine be a string set to the excel engine to use. Set engine to openpyxl — 
 engine : str = openpyxl
 
-# read worksheet into pandas dataframe — 
+# Read Excel worksheet into pandas dataframe — 
 df = pandas.read_excel(io=io, sheet_name=sheet_name, skiprows=skiprows, header=None, nrows=nrows, dtype=dtype, engine=engine)
 
 # use openpyxl to replace dataframe column numbers with letters — 
