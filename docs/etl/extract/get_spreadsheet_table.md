@@ -11,17 +11,19 @@ Parameters
 ----------
 
 ```sheet_name : str```   
-    Name of the spreadsheet to be extracted from an excel workbook. 
+    Name of the spreadsheet to be extracted from an excel workbook.  
+
 ```file_path : str```  
-    Absolute path to the Excel workbook containing the census results. 
+    Absolute path to the Excel workbook containing the census results.  
+
 ```skiprows : int```  
-    Number of rows to skip to beginning of data table. 
+    Number of rows to skip to beginning of data table.  
 
 
 Returns
 -------
 
-```pandas.DataFrame```
+```DataFrame```
 
 
 Function
@@ -63,17 +65,18 @@ dtype : str = 'object'
 # Let engine be a string set to the excel engine to use. Set engine to openpyxl — 
 engine : str = openpyxl
 
-# read worksheet into pandas dataframe — 
+# Read Excel worksheet into pandas dataframe — 
 df = pandas.read_excel(io=io, sheet_name=sheet_name, skiprows=skiprows, nrows=nrows, dtype=dtype, engine=engine)
 
-# remove empty or blank values
+# Delete empty or blank values
 df.dropna(inplace = True)
 
-# use openpyxl to replace dataframe column numbers with letters — 
+# Use openpyxl to replace dataframe column numbers with letters — 
 for col in df.columns: 
     c = list(df.columns).index(col)
     alpha = get_column_letter( int(c) + 1 ) #avoid zero 
     df.rename(columns={col: alpha}, inplace = True)
+
 
 # RETURN
 
