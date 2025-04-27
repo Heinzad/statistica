@@ -5,7 +5,7 @@
 Extract Spreadsheet Table
 ========================= 
 
-Use `extract_spreadsheet_range` to extract a data table that headers from census results given in spreadsheet format. 
+Use `extract_spreadsheet_table` to extract a data table with headers from a given spreadsheet. 
 
 Parameters
 ----------
@@ -94,7 +94,7 @@ Import the functionality from the `etl_extract` module:
 
 ```python
 # import method from module
-from src.etl_extract import extract_spreadsheet_range
+from src.etl_extract import extract_spreadsheet_table
 
 # initialise parameters
 sheet_name = 'Footnotes and symbols'
