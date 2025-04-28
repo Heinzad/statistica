@@ -1,8 +1,6 @@
 #src\etl\extract.py
 
-"""helper functions 
-
-
+""" 
 
 Extract Module  
 ============== 
@@ -13,13 +11,28 @@ Extracts source data into a data store.
 Methods 
 ------- 
 
+ingest_geospatial_file(file_path:str, db_path:str, table_name:str): 
+    Read a given geospatial file and write to a given data store. Returns nothing. 
+
+ingest_spreadsheet_table(sheet_name:str, file_path:str, skiprows:int, db_path:str, table_name:str): 
+    Read a data table in a given spreadsheet and write to a given data store. Returns nothing. 
+
+ingest_spreadsheet_range(sheet_name:str, file_path:str, skiprows:int, nrows:int, db_path:str, table_name:str): 
+    Read a range of cells in a given spreadsheet and write to a given data store. Returns nothing.
+
+ingest_spreadsheet_body(sheet_name:str, file_path:str, skiprows:int, db_path:str, table_name:str): 
+    Read the body of a pivot table with hierachical headers in a given spreadsheet and write to a given data store. Returns nothing.
+
+ingest_spreadsheet_head(sheet_name:str, file_path:str, skiprows:int, nrows:int, survey:str, dated:str, section:str, db_path:str, table_name:str='Questions'): 
+    Read the body of a pivot table with hierachical headers in a given spreadsheet and write to a given data store. Returns nothing.
+
+ingest_access_db : 
+    Extract Microsoft Access database tables into a sqlite database —  
+    Returns number of database records created.
+
 _put_dataframe : 
     Store dataframes in a sqlite database — 
     Returns number of records created in database for a given dataframe, table name, and database path
-
-_get_access_db : 
-    Extract Microsoft Access database tables into a sqlite database —  
-    Returns number of database records created. 
 
 _get_geospatial_file : 
     Extract a geospatial file — 
@@ -49,6 +62,90 @@ from openpyxl.utils import get_column_letter
 from typing import Tuple, Dict
 from sqlalchemy.types import NVARCHAR
 from src.db.connect import connect_mdb, connect_db 
+
+
+    
+
+def ingest_geospatial_file(file_path:str, db_path:str, table_name:str): 
+    """Read a given geospatial file and write to a given data store. Returns nothing. """
+    shp = _get_geospatial_file(file_path=file_path)
+    shp.pipe(_put_dataframe, db_path=db_path, table_name=table_name)
+
+
+
+def ingest_spreadsheet_table(sheet_name:str, file_path:str, skiprows:int, db_path:str, table_name:str): 
+    """Read a data table in a given spreadsheet and write to a given data store. Returns nothing. """
+    tbl = _get_spreadsheet_table(sheet_name=sheet_name, file_path=file_path, skiprows=skiprows)
+    tbl.pipe(_put_dataframe, db_path=db_path, table_name=table_name)
+
+
+
+def ingest_spreadsheet_range(sheet_name:str, file_path:str, skiprows:int, nrows:int, db_path:str, table_name:str): 
+    """Read a range of cells in a given spreadsheet and write to a given data store. Returns nothing. """
+    rng = _get_spreadsheet_range(sheet_name=sheet_name, file_path=file_path, skiprows=skiprows, nrows=nrows)
+    rng.pipe(_put_dataframe, db_path=db_path, table_name=table_name)
+
+
+
+def ingest_spreadsheet_body(sheet_name:str, file_path:str, skiprows:int, db_path:str, table_name:str): 
+    """Read the body of a pivot table with hierachical headers in a given spreadsheet and write to a given data store. Returns nothing. """
+    body = _get_spreadsheet_body(sheet_name=sheet_name, file_path=file_path, skiprows=skiprows, table_name=table_name)
+    counts = body[0]
+    counts.pipe(_put_dataframe, db_path=db_path, table_name=table_name)
+    tracts = body[1]
+    tracts.pipe(_put_dataframe, db_path=db_path, table_name=table_name)
+
+
+
+def ingest_spreadsheet_head(sheet_name:str, file_path:str, skiprows:int, nrows:int, survey:str, dated:str, section:str, db_path:str, table_name:str='Questions'): 
+    """Read the body of a pivot table with hierachical headers in a given spreadsheet and write to a given data store. Returns nothing. """
+    head = _get_spreadsheet_head(sheet_name=sheet_name, file_path=file_path, skiprows=skiprows, table_name=table_name)
+    head.pipe(_put_dataframe, db_path=db_path, table_name=table_name)
+
+
+
+def ingest_access_db(mdb_path:str, db_path:str)->Dict: 
+    """Read Microsoft Access database tables and write into a sqlite database — 
+    Returns dictionary of number of rows inserted per table. 
+    
+    Parameters
+    ----------
+    mdb_path : str 
+        Absolute path to a Microsoft Access database file
+    db_path : str 
+        Absolute path to database file 
+    
+    Returns
+    -------
+    dict 
+        { table name : row count }
+    
+    Example
+    -------
+    >>> extract = store_access_db(
+    ... mdb_path = 'C:/Users/Public/Documents/CensusData.mdb',
+    ... db_path = 'C:/Users/Public/Documents/test_db.sqlite'
+    ... )
+    >>> [print(k,v) for k,v in extract]
+    
+    """ 
+    table_name = str()
+    row_count = int()
+    results = dict()
+    mdb_conn = connect_mdb(mdb_path=mdb_path)
+    mdb_cursor = mdb_conn.cursor()
+    mdb_tables = mdb_cursor.tables(tableType='TABLE')
+    for tbl in mdb_tables: 
+        row_count = 0 
+        table_name = tbl.table_name 
+        dataframe = pd.read_sql(f"""SELECT * FROM "{table_name}";""", mdb_conn)
+        row_count = _put_dataframe(dataframe=dataframe, table_name=table_name, db_path=db_path)
+        results.update({table_name: row_count})
+    return results
+
+
+# helpers 
+
 
 
 def _put_dataframe(dataframe: pd.DataFrame, table_name:str, db_path:str) -> (int | None): 
@@ -91,45 +188,6 @@ def _put_dataframe(dataframe: pd.DataFrame, table_name:str, db_path:str) -> (int
     ) 
 
 
-def _get_access_db(mdb_path:str, db_path:str)->Dict: 
-    """Extract Microsoft Access database tables into a sqlite database — 
-    Returns dictionary of number of rows inserted per table. 
-    
-    Parameters
-    ----------
-    mdb_path : str 
-        Absolute path to a Microsoft Access database file
-    db_path : str 
-        Absolute path to database file 
-    
-    Returns
-    -------
-    dict 
-        { table name : row count }
-    
-    Example
-    -------
-    >>> extract = _get_access_db(
-    ... mdb_path = 'C:/Users/Public/Documents/CensusData.mdb',
-    ... db_path = 'C:/Users/Public/Documents/test_db.sqlite'
-    ... )
-    >>> [print(k,v) for k,v in extract]
-    
-    """ 
-    table_name = str()
-    row_count = int()
-    results = dict()
-    mdb_conn = connect_mdb(mdb_path=mdb_path)
-    mdb_cursor = mdb_conn.cursor()
-    mdb_tables = mdb_cursor.tables(tableType='TABLE')
-    for tbl in mdb_tables: 
-        row_count = 0 
-        table_name = tbl.table_name 
-        dataframe = pd.read_sql(f"""SELECT * FROM "{table_name}";""", mdb_conn)
-        row_count = _put_dataframe(dataframe=dataframe, table_name=table_name, db_path=db_path)
-        results.update({table_name: row_count})
-    return results
-
 
 def _get_geospatial_file(file_path:str) -> gpd.GeoDataFrame: 
     """Extract a geospatial file — 
@@ -155,9 +213,7 @@ def _get_geospatial_file(file_path:str) -> gpd.GeoDataFrame:
     stg = src.copy() 
     return stg.to_wkt() 
 
-    
 
-# table 
     
 def _get_spreadsheet_table(sheet_name:str, file_path:str, skiprows:int) -> pd.DataFrame: 
     """Extract a data table that has headers — 
@@ -199,7 +255,6 @@ def _get_spreadsheet_table(sheet_name:str, file_path:str, skiprows:int) -> pd.Da
     return stg
     
 
-# Range 
 
 def _get_spreadsheet_range(sheet_name:str, file_path:str, skiprows:int, nrows:int) -> pd.DataFrame: 
     """Extract a range of cells without headers — 
@@ -248,7 +303,6 @@ def _get_spreadsheet_range(sheet_name:str, file_path:str, skiprows:int, nrows:in
     return stg 
 
 
-# Pivot Table Body 
 
 def _get_spreadsheet_body(sheet_name:str, file_path:str, skiprows:int, table_name:str ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Extract and unpivot the body of a pivot table into a long dataframe — 
@@ -313,9 +367,8 @@ def _get_spreadsheet_body(sheet_name:str, file_path:str, skiprows:int, table_nam
     return dfc, dfg  
 
 
-# Extract Headers 
- 
-def _get_spreadsheet_head(sheet_name:str, db_path:str, file_path:str, skiprows:int, nrows:int, survey:str, dated:str, section:str, table_name:str='Questions'): 
+
+def _get_spreadsheet_head(sheet_name:str, file_path:str, skiprows:int, nrows:int, survey:str, dated:str, section:str, table_name:str='Questions'): 
     """Extract and unpivot hierarchical headers of a pivot table — 
     Returns a pandas dataframe from unpivoted multi-line headings in the head of a pivot table in a 
     given excel workbook. 
@@ -377,8 +430,6 @@ def _get_spreadsheet_head(sheet_name:str, db_path:str, file_path:str, skiprows:i
     pvt0['survey_name'] = survey
     pvt0['survey_date'] = dated 
     pvt0['survey_section'] = section
-
-    # reoder columns 
     pvt = pvt0.loc[:,['question_code', 'question_text', 'question_text2', 'survey_name', 'survey_date', 'survey_section']]
     return pvt 
     
