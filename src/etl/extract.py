@@ -13,31 +13,31 @@ Extracts source data into a data store.
 Methods 
 ------- 
 
-put_dataframe : 
+_put_dataframe : 
     Store dataframes in a sqlite database — 
     Returns number of records created in database for a given dataframe, table name, and database path
 
-get_access_db : 
+_get_access_db : 
     Extract Microsoft Access database tables into a sqlite database —  
     Returns number of database records created. 
 
-get_geospatial_file : 
+_get_geospatial_file : 
     Extract a geospatial file — 
     Returns a geopandas geodataframe 
 
-get_spreadsheet_table : 
+_get_spreadsheet_table : 
     Extract a data table that has headers — 
     Returns a pandas dataframe
 
-get_spreadsheet_range : 
+_get_spreadsheet_range : 
     Extract a range of cells without headers — 
     Returns a pandas dataframe 
 
-get_spreadsheet_body : 
+_get_spreadsheet_body : 
     Extract and unpivot the body of a pivot table — 
     Returns a tuple of pandas dataframes 
 
-get_spreadsheet_head : 
+_get_spreadsheet_head : 
     Extract and unpivot hierachical headers of a pivot table — 
     Returns a pandas dataframe 
 
@@ -50,7 +50,8 @@ from typing import Tuple, Dict
 from sqlalchemy.types import NVARCHAR
 from src.db.connect import connect_mdb, connect_db 
 
-def put_dataframe(dataframe: pd.DataFrame, table_name:str, db_path:str) -> (int | None): 
+
+def _put_dataframe(dataframe: pd.DataFrame, table_name:str, db_path:str) -> (int | None): 
     """Store dataframes in a sqlite database — 
     Returns number of records created on saving a given DataFrame to a database table with a given name. 
     
@@ -71,10 +72,10 @@ def put_dataframe(dataframe: pd.DataFrame, table_name:str, db_path:str) -> (int 
     Example
     -------
     >>> file_path = 'C:/Users/Public/Documents/AU1996.ZIP'
-    >>> dataframe = get_geospatial_file(file_path=file_path, db_path=db_path, table_alias=table_alias)
+    >>> dataframe = _get_geospatial_file(file_path=file_path, db_path=db_path, table_alias=table_alias)
     >>> table_name = 'AU1996'
     >>> db_path = 'C:/Users/Public/Documents/test_db.sqlite'
-    >>> result = put_dataframe(dataframe=dataframe, table_name=table_name, db_path)
+    >>> result = _put_dataframe(dataframe=dataframe, table_name=table_name, db_path)
     >>> print(result)
 
     """ 
@@ -90,7 +91,7 @@ def put_dataframe(dataframe: pd.DataFrame, table_name:str, db_path:str) -> (int 
     ) 
 
 
-def get_access_db(mdb_path:str, db_path:str)->Dict: 
+def _get_access_db(mdb_path:str, db_path:str)->Dict: 
     """Extract Microsoft Access database tables into a sqlite database — 
     Returns dictionary of number of rows inserted per table. 
     
@@ -108,7 +109,7 @@ def get_access_db(mdb_path:str, db_path:str)->Dict:
     
     Example
     -------
-    >>> extract = get_access_db(
+    >>> extract = _get_access_db(
     ... mdb_path = 'C:/Users/Public/Documents/CensusData.mdb',
     ... db_path = 'C:/Users/Public/Documents/test_db.sqlite'
     ... )
@@ -125,12 +126,12 @@ def get_access_db(mdb_path:str, db_path:str)->Dict:
         row_count = 0 
         table_name = tbl.table_name 
         dataframe = pd.read_sql(f"""SELECT * FROM "{table_name}";""", mdb_conn)
-        row_count = put_dataframe(dataframe=dataframe, table_name=table_name, db_path=db_path)
+        row_count = _put_dataframe(dataframe=dataframe, table_name=table_name, db_path=db_path)
         results.update({table_name: row_count})
     return results
 
 
-def get_geospatial_file(file_path:str) -> gpd.GeoDataFrame: 
+def _get_geospatial_file(file_path:str) -> gpd.GeoDataFrame: 
     """Extract a geospatial file — 
     Returns a GeoDataFrame with geometries converted to Well-Known-Text 
     from a given geospatial file. 
@@ -146,18 +147,19 @@ def get_geospatial_file(file_path:str) -> gpd.GeoDataFrame:
 
     Example
     -------
-    >>> extract = get_geospatial_file(file_path = 'C:/Users/Public/Documents/AU1996.ZIP') 
+    >>> extract = _get_geospatial_file(file_path = 'C:/Users/Public/Documents/AU1996.ZIP') 
     >>> print(extract)
     
     """
-    gdf = gpd.read_file(file_path)  
-    return gdf.to_wkt() 
+    src = gpd.read_file(file_path)  
+    stg = src.copy() 
+    return stg.to_wkt() 
 
     
 
 # table 
     
-def get_spreadsheet_table(sheet_name:str, file_path:str, skiprows:int) -> pd.DataFrame: 
+def _get_spreadsheet_table(sheet_name:str, file_path:str, skiprows:int) -> pd.DataFrame: 
     """Extract a data table that has headers — 
     Returns a pandas DataFrame for a data table in a given excel workbook
     
@@ -176,7 +178,7 @@ def get_spreadsheet_table(sheet_name:str, file_path:str, skiprows:int) -> pd.Dat
 
     Example
     ------- 
-    >>> extract = get_spreadsheet_table(
+    >>> extract = _get_spreadsheet_table(
     ... sheet_name = 'Geographic Key',
     ... file_path = "C:/Users/Public/Documents/2013-mb-dataset-Total-New-Zealand-individual-part-1.xlsx",
     ... skiprows = 2
@@ -184,7 +186,7 @@ def get_spreadsheet_table(sheet_name:str, file_path:str, skiprows:int) -> pd.Dat
     >>> print(extract)
     
     """ 
-    df = pd.read_excel(
+    src = pd.read_excel(
         io = pd.ExcelFile(file_path), 
         sheet_name=sheet_name, 
         skiprows=skiprows, 
@@ -192,13 +194,14 @@ def get_spreadsheet_table(sheet_name:str, file_path:str, skiprows:int) -> pd.Dat
         dtype='object', 
         engine='openpyxl'
     )
-    df.dropna(inplace = True) 
-    return df 
+    stg = src.copy() 
+    stg.dropna(inplace = True) 
+    return stg
     
 
 # Range 
 
-def get_spreadsheet_range(sheet_name:str, file_path:str, skiprows:int, nrows:int) -> pd.DataFrame: 
+def _get_spreadsheet_range(sheet_name:str, file_path:str, skiprows:int, nrows:int) -> pd.DataFrame: 
     """Extract a range of cells without headers — 
     Returns a pandas DataFrame for a range in a given excel workbook
     
@@ -219,7 +222,7 @@ def get_spreadsheet_range(sheet_name:str, file_path:str, skiprows:int, nrows:int
 
     Example
     ------- 
-    >>> extract = get_spreadsheet_range(
+    >>> extract = _get_spreadsheet_range(
     ... sheet_name = 'Footnotes and symbols',
     ... file_path = "C:/Users/Public/Documents/2013-mb-dataset-Total-New-Zealand-individual-part-1.xlsx",
     ... skiprows = 12,
@@ -228,7 +231,7 @@ def get_spreadsheet_range(sheet_name:str, file_path:str, skiprows:int, nrows:int
     >>> print(extract)
     
     """ 
-    df = pd.read_excel(
+    src = pd.read_excel(
         io = pd.ExcelFile(file_path), 
         sheet_name=sheet_name, 
         skiprows=skiprows, 
@@ -236,17 +239,18 @@ def get_spreadsheet_range(sheet_name:str, file_path:str, skiprows:int, nrows:int
         dtype='object', 
         engine='openpyxl'
     )
-    df.dropna(inplace = True) 
-    for col in df.columns: 
-        c = list(df.columns).index(col)
+    stg = src.copy() 
+    stg.dropna(inplace = True) 
+    for col in stg.columns: 
+        c = list(stg.columns).index(col)
         alpha = get_column_letter( int(c) + 1 ) #avoid zero 
-        df.rename(columns={col: alpha}, inplace = True) 
-    return df 
+        stg.rename(columns={col: alpha}, inplace = True) 
+    return stg 
 
 
 # Pivot Table Body 
 
-def get_spreadsheet_body(sheet_name:str, file_path:str, skiprows:int, table_name:str ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def _get_spreadsheet_body(sheet_name:str, file_path:str, skiprows:int, table_name:str ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Extract and unpivot the body of a pivot table into a long dataframe — 
     Returns a tuple of pandas DataFrames for geographies and counts respectively 
     from the body of a pivot table in a given excel workbook
@@ -269,7 +273,7 @@ def get_spreadsheet_body(sheet_name:str, file_path:str, skiprows:int, table_name
     
     Example
     -------
-    >>> extract = get_spreadsheet_body(
+    >>> extract = _get_spreadsheet_body(
     ... sheet_name = '1 Meshblock',
     ... file_path = "C:/Users/Public/Documents/2013-mb-dataset-Total-New-Zealand-individual-part-1.xlsx",
     ... skiprows = 10,
@@ -280,10 +284,7 @@ def get_spreadsheet_body(sheet_name:str, file_path:str, skiprows:int, table_name
 
     """
     table_name = table_name.lower
-    df = pd.DataFrame() 
-    dfg = pd.DataFrame() 
-    dfc = pd.DataFrame() 
-    df = pd.read_excel(
+    src = pd.read_excel(
         io = pd.ExcelFile(file_path), 
         sheet_name=sheet_name, 
         skiprows=skiprows, 
@@ -291,19 +292,20 @@ def get_spreadsheet_body(sheet_name:str, file_path:str, skiprows:int, table_name
         dtype='object', 
         engine='openpyxl'
     ) 
-    for col in df.columns: 
-        c = list(df.columns).index(col)
+    stg = src.copy() 
+    for col in stg.columns: 
+        c = list(stg.columns).index(col)
         alpha = get_column_letter( int(c) + 1 ) 
-        df.rename(columns={col: alpha}, inplace = True) 
-    df['A'] = df['A'].fillna('00') 
+        stg.rename(columns={col: alpha}, inplace = True) 
+    stg['A'] = stg['A'].fillna('00') 
     if table_name == 'meshblock': 
-        dfg = df[['A']] 
+        dfg = stg[['A']] 
         dfg.columns = [f'{table_name}_code'] 
-        dfc0 = df 
+        dfc0 = stg 
     else: 
-        dfg = df[['A', 'B']] 
+        dfg = stg[['A', 'B']] 
         dfg.columns = [f'{table_name}_code', f'{table_name}_description'] 
-        dfc0 = df.drop(['B'], axis=1) 
+        dfc0 = stg.drop(['B'], axis=1) 
     dfc1 = dfc0.set_index(['A']).stack() 
     dfc2 = dfc1.to_frame() 
     dfc = dfc2.reset_index() 
@@ -313,7 +315,7 @@ def get_spreadsheet_body(sheet_name:str, file_path:str, skiprows:int, table_name
 
 # Extract Headers 
  
-def get_spreadsheet_head(sheet_name:str, db_path:str, file_path:str, skiprows:int, nrows:int, survey:str, dated:str, section:str, table_name:str='Questions'): 
+def _get_spreadsheet_head(sheet_name:str, db_path:str, file_path:str, skiprows:int, nrows:int, survey:str, dated:str, section:str, table_name:str='Questions'): 
     """Extract and unpivot hierarchical headers of a pivot table — 
     Returns a pandas dataframe from unpivoted multi-line headings in the head of a pivot table in a 
     given excel workbook. 
@@ -352,7 +354,7 @@ def get_spreadsheet_head(sheet_name:str, db_path:str, file_path:str, skiprows:in
     ... )
     >>> print(extract)
     """
-    df = pd.read_excel(
+    src = pd.read_excel(
         io = pd.ExcelFile(file_path), 
         sheet_name=sheet_name, 
         skiprows=skiprows,
@@ -361,11 +363,12 @@ def get_spreadsheet_head(sheet_name:str, db_path:str, file_path:str, skiprows:in
         dtype='object',
         engine='openpyxl'
     )
-    for col in df.columns: 
-        c = list(df.columns).index(col)
+    stg = src.copy() 
+    for col in stg.columns: 
+        c = list(stg.columns).index(col)
         alpha = get_column_letter( int(c) + 1 )
-        df.rename(columns={col: alpha}, inplace = True) 
-    pvt0 = df.transpose() 
+        stg.rename(columns={col: alpha}, inplace = True) 
+    pvt0 = stg.transpose() 
     pvt0.reset_index() 
     pvt0.columns = ['question_text', 'question_text2']  
     pvt0['question_text'] = pvt0['question_text'].ffill(axis=0) 
