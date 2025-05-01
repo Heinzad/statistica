@@ -71,7 +71,7 @@ History
 20250427 -- Add helper functions
 20250428 -- prefix helper function names with an underscore to indicate they are private
 20250429 -- Add pipelines to integrate helper functions in a sequence to extract from source file to a sink data store
-20250430 -- decompose helper functions into source and stage, apply to ingest pipelines.
+20250430 -- decompose helper functions into _get and _set, pipe with _put in ingest methods.
 20250501 -- Add simple module logging
 
 """
@@ -199,7 +199,7 @@ def ingest_spreadsheet_range(sheet_name:str, file_path:str, skiprows:int, nrows:
 
 def ingest_spreadsheet_body(sheet_name:str, file_path:str, skiprows:int, table_name:str, db_path:str): 
     """Read the body of a pivot table with hierachical headers in a given spreadsheet and write to a given data store. Returns nothing. """
-    _body = _get_spreadsheet_body(sheet_name=sheet_name, file_path=file_path, skiprows=skiprows, table_name=table_name)
+    _body = _get_spreadsheet_body(sheet_name=sheet_name, file_path=file_path, skiprows=skiprows)
     _body.pipe(_set_spreadsheet_body_count, table_name=table_name).pipe(_put_dataframe, table_name=PREFIX1+table_name, db_path=db_path)
     _body.pipe(_set_spreadsheet_body_geog, table_name=table_name).pipe(_put_dataframe, table_name=PREFIX2+table_name, db_path=db_path)
 
@@ -228,7 +228,7 @@ def ingest_access_db(mdb_path:str, db_path:str)->Dict:
     
     Example
     -------
-    >>> extract = store_access_db(
+    >>> src = store_access_db(
     ... mdb_path = 'C:/Users/Public/Documents/CensusData.mdb',
     ... db_path = 'C:/Users/Public/Documents/test_db.sqlite'
     ... )
@@ -310,8 +310,8 @@ def _get_geospatial_file(file_path:str) -> gpd.GeoDataFrame:
 
     Example
     -------
-    >>> extract = _get_geospatial_file(file_path = 'zip:///Users/Public/Documents/AU1996.ZIP') 
-    >>> print(extract)
+    >>> src = _get_geospatial_file(file_path = 'zip:///Users/Public/Documents/AU1996.ZIP') 
+    >>> print(src)
     """
     return gpd.read_file(file_path)   
 
@@ -350,12 +350,12 @@ def _get_spreadsheet_table(sheet_name:str, file_path:str, skiprows:int) -> pd.Da
 
     Example
     ------- 
-    >>> extract = _get_spreadsheet_table(
+    >>> src = _get_spreadsheet_table(
     ... sheet_name = 'Geographic Key',
     ... file_path = "C:/Users/Public/Documents/2013-mb-dataset-Total-New-Zealand-individual-part-1.xlsx",
     ... skiprows = 2
     ... )
-    >>> print(extract)
+    >>> print(src)
     
     """ 
     return pd.read_excel(
@@ -397,13 +397,13 @@ def _get_spreadsheet_range(sheet_name:str, file_path:str, skiprows:int, nrows:in
 
     Example
     ------- 
-    >>> extract = _get_spreadsheet_range(
+    >>> src = _get_spreadsheet_range(
     ... sheet_name = 'Footnotes and symbols',
     ... file_path = "C:/Users/Public/Documents/2013-mb-dataset-Total-New-Zealand-individual-part-1.xlsx",
     ... skiprows = 12,
     ... nrows = 14
     ... )
-    >>> print(extract)
+    >>> print(src)
     
     """ 
     return pd.read_excel(
@@ -418,7 +418,7 @@ def _get_spreadsheet_range(sheet_name:str, file_path:str, skiprows:int, nrows:in
 @log_decorator
 def _set_spreadsheet_range(dataframe:pd.DataFrame, column_names: List)->pd.DataFrame:
     """
-    Returns a cleansed dataframe soruced from a range of cells in a spreadsheet
+    Returns a cleansed dataframe sourced from a range of cells in a spreadsheet
 
     Parameters
     ----------
@@ -440,7 +440,7 @@ def _set_spreadsheet_range(dataframe:pd.DataFrame, column_names: List)->pd.DataF
 
 
 @log_decorator
-def _get_spreadsheet_body(sheet_name:str, file_path:str, skiprows:int, table_name:str ) -> pd.DataFrame:
+def _get_spreadsheet_body(sheet_name:str, file_path:str, skiprows:int) -> pd.DataFrame:
     """Extract and unpivot the body of a pivot table into a long dataframe — 
     Returns a tuple of pandas DataFrames for geographies and counts respectively 
     from the body of a pivot table in a given excel workbook
@@ -463,14 +463,13 @@ def _get_spreadsheet_body(sheet_name:str, file_path:str, skiprows:int, table_nam
     
     Example
     -------
-    >>> extract = _get_spreadsheet_body(
+    >>> src = _get_spreadsheet_body(
     ... sheet_name = '1 Meshblock',
     ... file_path = "C:/Users/Public/Documents/2013-mb-dataset-Total-New-Zealand-individual-part-1.xlsx",
     ... skiprows = 10,
     ... table_name = 'MeshBlock'
     ... )
-    >>> print(extract[0])
-    >>> print(extract[1])
+    >>> print(src)
 
     """
     return pd.read_excel(
