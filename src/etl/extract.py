@@ -71,20 +71,116 @@ History
 20250427 -- Add helper functions
 20250428 -- prefix helper function names with an underscore to indicate they are private
 20250429 -- Add pipelines to integrate helper functions in a sequence to extract from source file to a sink data store
-20250430 -- split helper functions into source and stage, apply to pipelines.
+20250430 -- decompose helper functions into source and stage, apply to ingest pipelines.
+20250501 -- Add simple module logging
 
 """
-
+import os
+import functools
+import logging
 import pandas as pd
 import geopandas as gpd
 from openpyxl.utils import get_column_letter 
 from typing import Dict, List
 from sqlalchemy.types import NVARCHAR
+from datetime import datetime, timezone
+from dotenv import load_dotenv
 from src.db.connect import connect_mdb, connect_db 
 
+load_dotenv()
 
 PREFIX1 = 'count_'
 PREFIX2 = 'geog_'   
+
+# Logging setup 
+
+LOGDIR = os.getenv('LOGDIR')
+FORMAT='%(asctime)s.%(msecs)03d %(filename)s %(lineno)s %(levelname)s | %(message)s'
+DATEFORMAT='%Y-%m-%d %H:%M:%S' 
+BATCH_ID = int(datetime.now(timezone.utc).timestamp() * 1000000)
+
+def get_logger(log_file_name):
+    """ Creates and returns logger object """
+    log_path = LOGDIR + log_file_name.replace(chr(46),chr(95)) + '.log'
+    logger = logging.getLogger(__name__)
+    formatter = logging.Formatter(fmt=FORMAT,datefmt=DATEFORMAT)
+    logger.handlers.clear()
+    file_handler = logging.FileHandler(log_path, 'a') 
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+    logger.setLevel(logging.DEBUG)
+    logger.propagate=False
+    return logger
+
+def prettify_return_type(class_type: str)->str: 
+    result_type1 = class_type[1:-1].split(' ')
+    result_type2 = result_type1[1]
+    return result_type2[1:-1]
+ 
+def log_decorator(_func=None):
+    def log_decorator_info(func):
+        @functools.wraps(func)
+        def log_decorator_wrapper(*args, **kwargs): 
+            msg = {'BATCH': BATCH_ID} 
+            try: 
+                logger_obj = get_logger(log_file_name=__name__) 
+                msg.update({ 'FUNCTION': func.__name__})
+                p_args = list()
+                for a in args: 
+                    if isinstance(a, pd.DataFrame):  
+                        p_args.append("dataframe=DataFrame")
+                    elif isinstance(a, gpd.GeoDataFrame): 
+                        p_args.append("dataframe=GeoDataFrame")
+                    else: 
+                        p_args.append(repr(a))
+                p_kwargs = [f"{k}={v!r}" for k, v in kwargs.items()]
+                params = ", ".join(p_args + p_kwargs)
+                msg.update({'PARAMS': params })
+            except Exception as e:
+                msg.update({'ERROR': e})
+                logger_obj.error(str(msg)) 
+                raise 
+            try:
+                results = func(*args, **kwargs)
+                return_type = prettify_return_type(str(results.__class__))
+                returns = {'type': return_type }
+                items_returned = list()
+                item_count = 1
+                is_iterable = False
+                if return_type in ('list', 'tuple'): 
+                    is_iterable = True 
+                if is_iterable: 
+                    item_count = len(results)
+                for i in range(item_count): 
+                    if is_iterable: 
+                        result = results[i]
+                        return_type = prettify_return_type(str(result.__class__))
+                    else: 
+                        result = results
+                    if return_type in ('str', 'int', 'float'):
+                        returns.update({'rows': result})
+                    else: 
+                        try: 
+                            items_returned.append({'type': return_type, 'rows': len(result), 'cols': len(result.columns)})
+                        except: 
+                            returns.update({'rows': len(result)})
+                if is_iterable: 
+                    returns.update({'items': items_returned})
+                msg.update({ 'RETURN': returns }) 
+            except Exception as e:
+                msg.update({'ERROR': e})
+                logger_obj.error(str(msg))
+                raise
+            logger_obj.info(str(msg)) 
+            return results
+        return log_decorator_wrapper
+    if _func is None:
+        return log_decorator_info
+    else:
+        return log_decorator_info(_func)
+
+
+# pandas pipelines
 
 def ingest_geospatial_file(file_path:str, table_name:str, db_path:str): 
     """Read a given geospatial file and write to a given data store. Returns nothing. """
@@ -113,6 +209,7 @@ def ingest_spreadsheet_head(sheet_name:str, file_path:str, skiprows:int, nrows:i
     _head.pipe(_set_spreadsheet_head, survey=survey, dated=dated, section=section, table_name=table_name).pipe(_put_dataframe, table_name=table_name, db_path=db_path)
         
 
+@log_decorator
 def ingest_access_db(mdb_path:str, db_path:str)->Dict: 
     """Read Microsoft Access database tables and write into a sqlite database — 
     Returns dictionary of number of rows inserted per table. 
@@ -156,7 +253,7 @@ def ingest_access_db(mdb_path:str, db_path:str)->Dict:
 
 # helper functions 
 
-
+@log_decorator
 def _put_dataframe(dataframe: pd.DataFrame, table_name:str, db_path:str) -> (int | None): 
     """Store dataframes in a sqlite database — 
     Returns number of records created on saving a given DataFrame to a database table with a given name. 
@@ -197,7 +294,7 @@ def _put_dataframe(dataframe: pd.DataFrame, table_name:str, db_path:str) -> (int
     ) 
 
 
-
+@log_decorator
 def _get_geospatial_file(file_path:str) -> gpd.GeoDataFrame: 
     """Extract a geospatial file — 
     Returns a GeoDataFrame for a given geospatial file. 
@@ -218,6 +315,7 @@ def _get_geospatial_file(file_path:str) -> gpd.GeoDataFrame:
     """
     return gpd.read_file(file_path)   
 
+@log_decorator
 def _set_geospatial_file(dataframe:gpd.GeoDataFrame ) -> gpd.GeoDataFrame:
     """Returns a GeoDataFrame with geometries converted to Well-Known-Text 
     
@@ -232,7 +330,7 @@ def _set_geospatial_file(dataframe:gpd.GeoDataFrame ) -> gpd.GeoDataFrame:
     return dataframe.to_wkt()
 
 
-    
+@log_decorator
 def _get_spreadsheet_table(sheet_name:str, file_path:str, skiprows:int) -> pd.DataFrame: 
     """Extract a data table that has headers — 
     Returns a pandas DataFrame for a data table in a given excel workbook
@@ -269,13 +367,14 @@ def _get_spreadsheet_table(sheet_name:str, file_path:str, skiprows:int) -> pd.Da
         engine='openpyxl'
     )
 
+@log_decorator
 def _set_spreadsheet_table(dataframe:pd.DataFrame)->pd.DataFrame: 
     """Returns a cleansed dataframe"""
     tabled = dataframe.dropna() #inplace = True
     return tabled
 
 
-
+@log_decorator
 def _get_spreadsheet_range(sheet_name:str, file_path:str, skiprows:int, nrows:int) -> pd.DataFrame: 
     """Extract a range of cells without headers — 
     Returns a pandas DataFrame for a range in a given excel workbook
@@ -316,6 +415,7 @@ def _get_spreadsheet_range(sheet_name:str, file_path:str, skiprows:int, nrows:in
         engine='openpyxl'
     )
 
+@log_decorator
 def _set_spreadsheet_range(dataframe:pd.DataFrame, column_names: List)->pd.DataFrame:
     """
     Returns a cleansed dataframe soruced from a range of cells in a spreadsheet
@@ -339,7 +439,7 @@ def _set_spreadsheet_range(dataframe:pd.DataFrame, column_names: List)->pd.DataF
     return ranged
 
 
-
+@log_decorator
 def _get_spreadsheet_body(sheet_name:str, file_path:str, skiprows:int, table_name:str ) -> pd.DataFrame:
     """Extract and unpivot the body of a pivot table into a long dataframe — 
     Returns a tuple of pandas DataFrames for geographies and counts respectively 
@@ -382,6 +482,7 @@ def _get_spreadsheet_body(sheet_name:str, file_path:str, skiprows:int, table_nam
         engine='openpyxl'
     ) 
 
+@log_decorator
 def _set_spreadsheet_body_geog(dataframe:pd.DataFrame, table_name:str)->pd.DataFrame: 
     """Returns a cleansed geographies dataframe reshaped from wide to long
     
@@ -405,6 +506,7 @@ def _set_spreadsheet_body_geog(dataframe:pd.DataFrame, table_name:str)->pd.DataF
         dfg.columns = [f'{_name}_code', f'{_name}_description'] 
     return dfg 
 
+@log_decorator
 def _set_spreadsheet_body_count(dataframe:pd.DataFrame, table_name:str)->pd.DataFrame: 
     """Returns a cleansed counts dataframe reshaped from wide to long
     
@@ -436,7 +538,7 @@ def _set_spreadsheet_body_count(dataframe:pd.DataFrame, table_name:str)->pd.Data
     return dfc  
 
 
-
+@log_decorator
 def _get_spreadsheet_head(sheet_name:str, file_path:str, skiprows:int, nrows:int)->pd.DataFrame: 
     """Extract and unpivot hierarchical headers of a pivot table — 
     Returns a pandas dataframe from unpivoted multi-line headings in the head of a pivot table in a 
@@ -479,6 +581,7 @@ def _get_spreadsheet_head(sheet_name:str, file_path:str, skiprows:int, nrows:int
         engine='openpyxl'
     )
 
+@log_decorator
 def _set_spreadsheet_head(dataframe:pd.DataFrame, survey:str, dated:str, section:str, table_name:str='Questions')->pd.DataFrame:
     """Returns a cleansed question dataframe reshaped from wide to long
     
