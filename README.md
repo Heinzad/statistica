@@ -26,11 +26,16 @@ The project is structured into the following directories:
 
 ```
     statistica
+    ├── .venv/
     ├── docs/
     ├── samples/
     ├── src/
+    |   └── etl/
     ├── tests/
-    └── .venv/
+    ├── .env
+    ├── .gitignore
+    ├── LICENSE
+    └── README.md
 ``` 
 
 The folders contain: 
@@ -41,6 +46,17 @@ The folders contain:
 - base: database schematics
 - tests: test scripts
 - .venv: virtual environment 
+
+
+Environment Variables
+---------------------
+
+Set environment variables in the `.env` file: 
+
+```
+# Logging Directory 
+LOGDIR=
+```
 
 
 Dependencies 
@@ -54,4 +70,5 @@ Installing the principal packages listed here will also install a number of depe
 | GeoPandas | Geospatial extension to Pandas | 
 | pyodbc | Connects to Microsoft Access Databases |
 | SQL Alchemy | Connects to SQLite, Postgres, Oracle databases, etc | 
+| openpyxl | Connects to Excel files | 
 
