@@ -30,7 +30,8 @@ The project is structured into the following directories:
     ├── docs/
     ├── samples/
     ├── src/
-    |   └── etl/
+    |   ├── etl/
+    |   └── main.py
     ├── tests/
     ├── .env
     ├── .gitignore
