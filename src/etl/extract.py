@@ -1,6 +1,6 @@
 #src\etl\extract.py
 
-""" 
+"""etl 
 
 Extract Module  
 ============== 
@@ -11,19 +11,19 @@ Extracts source data into a data store.
 Methods 
 ------- 
 
-ingest_geospatial_file(file_path:str, db_path:str, table_name:str): 
+ingest_geospatial_file(file_path:str, table_name:str, db_path:str): 
     Read a given geospatial file and write to a given data store. Returns nothing. 
 
-ingest_spreadsheet_table(sheet_name:str, file_path:str, skiprows:int, db_path:str, table_name:str): 
+ingest_spreadsheet_table(sheet_name:str, file_path:str, skiprows:int, table_name:str, db_path:str): 
     Read a data table in a given spreadsheet and write to a given data store. Returns nothing. 
 
-ingest_spreadsheet_range(sheet_name:str, file_path:str, skiprows:int, nrows:int, db_path:str, table_name:str): 
+ingest_spreadsheet_range(sheet_name:str, file_path:str, skiprows:int, nrows:int, table_name:str, db_path:str): 
     Read a range of cells in a given spreadsheet and write to a given data store. Returns nothing.
 
-ingest_spreadsheet_body(sheet_name:str, file_path:str, skiprows:int, db_path:str, table_name:str): 
+ingest_spreadsheet_body(sheet_name:str, file_path:str, skiprows:int, table_name:str, db_path:str): 
     Read the body of a pivot table with hierachical headers in a given spreadsheet and write to a given data store. Returns nothing.
 
-ingest_spreadsheet_head(sheet_name:str, file_path:str, skiprows:int, nrows:int, survey:str, dated:str, section:str, db_path:str, table_name:str='Questions'): 
+ingest_spreadsheet_head(sheet_name:str, file_path:str, skiprows:int, nrows:int, survey:str, dated:str, section:str, table_name:str, db_path:str='Questions'): 
     Read the body of a pivot table with hierachical headers in a given spreadsheet and write to a given data store. Returns nothing.
 
 ingest_access_db : 
@@ -41,68 +41,77 @@ _get_geospatial_file :
 _get_spreadsheet_table : 
     Extract a data table that has headers — 
     Returns a pandas dataframe
+_set_spreadsheet_table : 
+    Returns a pandas dataframe
 
 _get_spreadsheet_range : 
     Extract a range of cells without headers — 
     Returns a pandas dataframe 
+_set_spreadsheet_range : 
+    Returns a pandas dataframe
 
 _get_spreadsheet_body : 
     Extract and unpivot the body of a pivot table — 
-    Returns a tuple of pandas dataframes 
+    Returns a pandas dataframe
+_set_spreadsheet_body_geog : 
+    Returns a pandas dataframe
+_set_spreadsheet_body_head : 
+    Returns a pandas dataframe
 
 _get_spreadsheet_head : 
     Extract and unpivot hierachical headers of a pivot table — 
     Returns a pandas dataframe 
+_set_spreadsheet_head : 
+    Returns a pandas dataframe
+
+
+History
+-------
+
+20250427 -- Add helper functions
+20250428 -- prefix helper function names with an underscore to indicate they are private
+20250429 -- Add pipelines to integrate helper functions in a sequence to extract from source file to a sink data store
+20250430 -- split helper functions into source and stage, apply to pipelines.
 
 """
 
 import pandas as pd
 import geopandas as gpd
 from openpyxl.utils import get_column_letter 
-from typing import Tuple, Dict
+from typing import Dict, List
 from sqlalchemy.types import NVARCHAR
 from src.db.connect import connect_mdb, connect_db 
 
 
-    
+PREFIX1 = 'count_'
+PREFIX2 = 'geog_'   
 
-def ingest_geospatial_file(file_path:str, db_path:str, table_name:str): 
+def ingest_geospatial_file(file_path:str, table_name:str, db_path:str): 
     """Read a given geospatial file and write to a given data store. Returns nothing. """
-    shp = _get_geospatial_file(file_path=file_path)
-    shp.pipe(_put_dataframe, db_path=db_path, table_name=table_name)
+    _geospatial = _get_geospatial_file(file_path=file_path)
+    _geospatial.pipe(_set_geospatial_file).pipe(_put_dataframe, table_name=table_name, db_path=db_path)
 
-
-
-def ingest_spreadsheet_table(sheet_name:str, file_path:str, skiprows:int, db_path:str, table_name:str): 
+def ingest_spreadsheet_table(sheet_name:str, file_path:str, skiprows:int, table_name:str, db_path:str): 
     """Read a data table in a given spreadsheet and write to a given data store. Returns nothing. """
-    tbl = _get_spreadsheet_table(sheet_name=sheet_name, file_path=file_path, skiprows=skiprows)
-    tbl.pipe(_put_dataframe, db_path=db_path, table_name=table_name)
+    _table = _get_spreadsheet_table(sheet_name=sheet_name, file_path=file_path, skiprows=skiprows)
+    _table.pipe(_set_spreadsheet_table).pipe(_put_dataframe, table_name=table_name, db_path=db_path)
 
-
-
-def ingest_spreadsheet_range(sheet_name:str, file_path:str, skiprows:int, nrows:int, db_path:str, table_name:str): 
+def ingest_spreadsheet_range(sheet_name:str, file_path:str, skiprows:int, nrows:int, column_names:List, table_name:str, db_path:str): 
     """Read a range of cells in a given spreadsheet and write to a given data store. Returns nothing. """
-    rng = _get_spreadsheet_range(sheet_name=sheet_name, file_path=file_path, skiprows=skiprows, nrows=nrows)
-    rng.pipe(_put_dataframe, db_path=db_path, table_name=table_name)
+    _range = _get_spreadsheet_range(sheet_name=sheet_name, file_path=file_path, skiprows=skiprows, nrows=nrows)
+    _range.pipe(_set_spreadsheet_range, column_names=column_names).pipe(_put_dataframe, table_name=table_name, db_path=db_path)
 
-
-
-def ingest_spreadsheet_body(sheet_name:str, file_path:str, skiprows:int, db_path:str, table_name:str): 
+def ingest_spreadsheet_body(sheet_name:str, file_path:str, skiprows:int, table_name:str, db_path:str): 
     """Read the body of a pivot table with hierachical headers in a given spreadsheet and write to a given data store. Returns nothing. """
-    body = _get_spreadsheet_body(sheet_name=sheet_name, file_path=file_path, skiprows=skiprows, table_name=table_name)
-    counts = body[0]
-    counts.pipe(_put_dataframe, db_path=db_path, table_name=table_name)
-    tracts = body[1]
-    tracts.pipe(_put_dataframe, db_path=db_path, table_name=table_name)
+    _body = _get_spreadsheet_body(sheet_name=sheet_name, file_path=file_path, skiprows=skiprows, table_name=table_name)
+    _body.pipe(_set_spreadsheet_body_count, table_name=table_name).pipe(_put_dataframe, table_name=PREFIX1+table_name, db_path=db_path)
+    _body.pipe(_set_spreadsheet_body_geog, table_name=table_name).pipe(_put_dataframe, table_name=PREFIX2+table_name, db_path=db_path)
 
-
-
-def ingest_spreadsheet_head(sheet_name:str, file_path:str, skiprows:int, nrows:int, survey:str, dated:str, section:str, db_path:str, table_name:str='Questions'): 
+def ingest_spreadsheet_head(sheet_name:str, file_path:str, skiprows:int, nrows:int, survey:str, dated:str, section:str, table_name:str, db_path:str='Questions'): 
     """Read the body of a pivot table with hierachical headers in a given spreadsheet and write to a given data store. Returns nothing. """
-    head = _get_spreadsheet_head(sheet_name=sheet_name, file_path=file_path, skiprows=skiprows, table_name=table_name)
-    head.pipe(_put_dataframe, db_path=db_path, table_name=table_name)
-
-
+    _head = _get_spreadsheet_head(sheet_name=sheet_name, file_path=file_path, skiprows=skiprows, nrows=nrows)
+    _head.pipe(_set_spreadsheet_head, survey=survey, dated=dated, section=section, table_name=table_name).pipe(_put_dataframe, table_name=table_name, db_path=db_path)
+        
 
 def ingest_access_db(mdb_path:str, db_path:str)->Dict: 
     """Read Microsoft Access database tables and write into a sqlite database — 
@@ -131,7 +140,7 @@ def ingest_access_db(mdb_path:str, db_path:str)->Dict:
     """ 
     table_name = str()
     row_count = int()
-    results = dict()
+    results = list()
     mdb_conn = connect_mdb(mdb_path=mdb_path)
     mdb_cursor = mdb_conn.cursor()
     mdb_tables = mdb_cursor.tables(tableType='TABLE')
@@ -140,12 +149,12 @@ def ingest_access_db(mdb_path:str, db_path:str)->Dict:
         table_name = tbl.table_name 
         dataframe = pd.read_sql(f"""SELECT * FROM "{table_name}";""", mdb_conn)
         row_count = _put_dataframe(dataframe=dataframe, table_name=table_name, db_path=db_path)
-        results.update({table_name: row_count})
+        results.append({table_name: row_count})
     return results
 
 
-# helpers 
 
+# helper functions 
 
 
 def _put_dataframe(dataframe: pd.DataFrame, table_name:str, db_path:str) -> (int | None): 
@@ -191,8 +200,7 @@ def _put_dataframe(dataframe: pd.DataFrame, table_name:str, db_path:str) -> (int
 
 def _get_geospatial_file(file_path:str) -> gpd.GeoDataFrame: 
     """Extract a geospatial file — 
-    Returns a GeoDataFrame with geometries converted to Well-Known-Text 
-    from a given geospatial file. 
+    Returns a GeoDataFrame for a given geospatial file. 
     
     Parameters
     ----------
@@ -205,13 +213,23 @@ def _get_geospatial_file(file_path:str) -> gpd.GeoDataFrame:
 
     Example
     -------
-    >>> extract = _get_geospatial_file(file_path = 'C:/Users/Public/Documents/AU1996.ZIP') 
+    >>> extract = _get_geospatial_file(file_path = 'zip:///Users/Public/Documents/AU1996.ZIP') 
     >>> print(extract)
-    
     """
-    src = gpd.read_file(file_path)  
-    stg = src.copy() 
-    return stg.to_wkt() 
+    return gpd.read_file(file_path)   
+
+def _set_geospatial_file(dataframe:gpd.GeoDataFrame ) -> gpd.GeoDataFrame:
+    """Returns a GeoDataFrame with geometries converted to Well-Known-Text 
+    
+    Parameters
+    ----------
+    dataframe : geopandas.GeoDataFrame
+
+    Returns
+    -------
+    geopandas.GeoDataFrame 
+    """
+    return dataframe.to_wkt()
 
 
     
@@ -242,7 +260,7 @@ def _get_spreadsheet_table(sheet_name:str, file_path:str, skiprows:int) -> pd.Da
     >>> print(extract)
     
     """ 
-    src = pd.read_excel(
+    return pd.read_excel(
         io = pd.ExcelFile(file_path), 
         sheet_name=sheet_name, 
         skiprows=skiprows, 
@@ -250,10 +268,12 @@ def _get_spreadsheet_table(sheet_name:str, file_path:str, skiprows:int) -> pd.Da
         dtype='object', 
         engine='openpyxl'
     )
-    stg = src.copy() 
-    stg.dropna(inplace = True) 
-    return stg
-    
+
+def _set_spreadsheet_table(dataframe:pd.DataFrame)->pd.DataFrame: 
+    """Returns a cleansed dataframe"""
+    tabled = dataframe.dropna() #inplace = True
+    return tabled
+
 
 
 def _get_spreadsheet_range(sheet_name:str, file_path:str, skiprows:int, nrows:int) -> pd.DataFrame: 
@@ -274,6 +294,7 @@ def _get_spreadsheet_range(sheet_name:str, file_path:str, skiprows:int, nrows:in
     Returns
     -------
     pandas.DataFrame
+        Enables pipelining
 
     Example
     ------- 
@@ -286,7 +307,7 @@ def _get_spreadsheet_range(sheet_name:str, file_path:str, skiprows:int, nrows:in
     >>> print(extract)
     
     """ 
-    src = pd.read_excel(
+    return pd.read_excel(
         io = pd.ExcelFile(file_path), 
         sheet_name=sheet_name, 
         skiprows=skiprows, 
@@ -294,17 +315,32 @@ def _get_spreadsheet_range(sheet_name:str, file_path:str, skiprows:int, nrows:in
         dtype='object', 
         engine='openpyxl'
     )
-    stg = src.copy() 
-    stg.dropna(inplace = True) 
-    for col in stg.columns: 
-        c = list(stg.columns).index(col)
+
+def _set_spreadsheet_range(dataframe:pd.DataFrame, column_names: List)->pd.DataFrame:
+    """
+    Returns a cleansed dataframe soruced from a range of cells in a spreadsheet
+
+    Parameters
+    ----------
+    pandas.DataFrame
+        Enables pipelining
+    
+    Returns
+    ----------
+    pandas.DataFrame
+        Enables pipelining
+    """
+    for col in dataframe: 
+        c = list(dataframe.columns).index(col)
         alpha = get_column_letter( int(c) + 1 ) #avoid zero 
-        stg.rename(columns={col: alpha}, inplace = True) 
-    return stg 
+        dataframe.rename(columns={col: alpha}, inplace = True) 
+    dataframe.columns = column_names 
+    ranged = dataframe.dropna() 
+    return ranged
 
 
 
-def _get_spreadsheet_body(sheet_name:str, file_path:str, skiprows:int, table_name:str ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def _get_spreadsheet_body(sheet_name:str, file_path:str, skiprows:int, table_name:str ) -> pd.DataFrame:
     """Extract and unpivot the body of a pivot table into a long dataframe — 
     Returns a tuple of pandas DataFrames for geographies and counts respectively 
     from the body of a pivot table in a given excel workbook
@@ -321,9 +357,9 @@ def _get_spreadsheet_body(sheet_name:str, file_path:str, skiprows:int, table_nam
         Name to be used in database table. 
     
     Returns
-    ------- 
-    Tuple[pandas.DataFrame, pandas.DataFrame]
-        A tuple of pandas dataframes for extracted geographies and counts respectively
+    ----------
+    pandas.DataFrame
+        Enables pipelining
     
     Example
     -------
@@ -337,8 +373,7 @@ def _get_spreadsheet_body(sheet_name:str, file_path:str, skiprows:int, table_nam
     >>> print(extract[1])
 
     """
-    table_name = table_name.lower
-    src = pd.read_excel(
+    return pd.read_excel(
         io = pd.ExcelFile(file_path), 
         sheet_name=sheet_name, 
         skiprows=skiprows, 
@@ -346,29 +381,63 @@ def _get_spreadsheet_body(sheet_name:str, file_path:str, skiprows:int, table_nam
         dtype='object', 
         engine='openpyxl'
     ) 
-    stg = src.copy() 
-    for col in stg.columns: 
-        c = list(stg.columns).index(col)
+
+def _set_spreadsheet_body_geog(dataframe:pd.DataFrame, table_name:str)->pd.DataFrame: 
+    """Returns a cleansed geographies dataframe reshaped from wide to long
+    
+    Parameters
+    ----------
+    pandas.DataFrame
+        Enables pipelining
+    
+    """
+    _name = table_name.lower()
+    for col in dataframe: 
+        c = list(dataframe).index(col)
         alpha = get_column_letter( int(c) + 1 ) 
-        stg.rename(columns={col: alpha}, inplace = True) 
-    stg['A'] = stg['A'].fillna('00') 
-    if table_name == 'meshblock': 
-        dfg = stg[['A']] 
-        dfg.columns = [f'{table_name}_code'] 
-        dfc0 = stg 
+        dataframe.rename(columns={col: alpha}, inplace = True) 
+    dataframe['A'] = dataframe['A'].fillna('00') 
+    if _name == 'meshblock': 
+        dfg = dataframe[['A']] 
+        dfg.columns = [f'{_name}_code']
     else: 
-        dfg = stg[['A', 'B']] 
-        dfg.columns = [f'{table_name}_code', f'{table_name}_description'] 
-        dfc0 = stg.drop(['B'], axis=1) 
+        dfg = dataframe[['A', 'B']] 
+        dfg.columns = [f'{_name}_code', f'{_name}_description'] 
+    return dfg 
+
+def _set_spreadsheet_body_count(dataframe:pd.DataFrame, table_name:str)->pd.DataFrame: 
+    """Returns a cleansed counts dataframe reshaped from wide to long
+    
+    Parameters
+    ----------
+    pandas.DataFrame
+        Enables pipelining
+
+    Returns
+    ----------
+    pandas.DataFrame
+        Enables pipelining
+    
+    """
+    _name = table_name.lower()
+    for col in dataframe: 
+        c = list(dataframe).index(col)
+        alpha = get_column_letter( int(c) + 1 ) 
+        dataframe.rename(columns={col: alpha}, inplace = True) 
+    dataframe['A'] = dataframe['A'].fillna('00') 
+    if _name == 'meshblock': 
+        dfc0 = dataframe 
+    else: 
+        dfc0 = dataframe.drop(['B'], axis=1) 
     dfc1 = dfc0.set_index(['A']).stack() 
     dfc2 = dfc1.to_frame() 
     dfc = dfc2.reset_index() 
-    dfc.columns = [f'{table_name}_code', 'question_code', 'response_count'] 
-    return dfc, dfg  
+    dfc.columns = [f'{_name}_code', 'question_code', 'response_count'] 
+    return dfc  
 
 
 
-def _get_spreadsheet_head(sheet_name:str, file_path:str, skiprows:int, nrows:int, survey:str, dated:str, section:str, table_name:str='Questions'): 
+def _get_spreadsheet_head(sheet_name:str, file_path:str, skiprows:int, nrows:int)->pd.DataFrame: 
     """Extract and unpivot hierarchical headers of a pivot table — 
     Returns a pandas dataframe from unpivoted multi-line headings in the head of a pivot table in a 
     given excel workbook. 
@@ -383,31 +452,24 @@ def _get_spreadsheet_head(sheet_name:str, file_path:str, skiprows:int, nrows:int
         Number of rows to skip to beginning of data table. 
     nrows : int
         Number of rows to extract from data table headers. 
-    survey : str
-        The name of the survey - e.g. 'Census'. 
-    dated : str 
-        The date of the survey - e.g. '2013'.
-    section : str
-        The section of the survey being extracted - e.g. 'Individual part 1' 
+     
     
     Returns
     -------
     pandas.DataFrame
+        Enables pipelining
 
     Example
     -------
-    >>> extract = extract_spreadsheet_head(
+    >>> src = _get_spreadsheet_head(
     ... sheet_name = '5 Regional Council Area',
     ... file_path = "C:/Users/Public/Documents/2013-mb-dataset-Total-New-Zealand-individual-part-1.xlsx",
     ... skiprows = 8,
-    ... nrows = 2,
-    ... survey = 'Census',
-    ... dated = '2013',
-    ... section = 'individual part 1'
+    ... nrows = 2
     ... )
-    >>> print(extract)
+    >>> print(src)
     """
-    src = pd.read_excel(
+    return pd.read_excel(
         io = pd.ExcelFile(file_path), 
         sheet_name=sheet_name, 
         skiprows=skiprows,
@@ -416,12 +478,42 @@ def _get_spreadsheet_head(sheet_name:str, file_path:str, skiprows:int, nrows:int
         dtype='object',
         engine='openpyxl'
     )
-    stg = src.copy() 
-    for col in stg.columns: 
-        c = list(stg.columns).index(col)
+
+def _set_spreadsheet_head(dataframe:pd.DataFrame, survey:str, dated:str, section:str, table_name:str='Questions')->pd.DataFrame:
+    """Returns a cleansed question dataframe reshaped from wide to long
+    
+    Parameters
+    ----------
+    pandas.DataFrame
+        Enables pipelining
+    survey : str
+        The name of the survey - e.g. 'Census'. 
+    dated : str 
+        The date of the survey - e.g. '2013'.
+    section : str
+        The section of the survey being extracted - e.g. 'Individual part 1'
+
+    Returns
+    -------
+    pandas.DataFrame
+        Enables pipelining
+
+    Example
+    -------
+    >>> stg = _set_spreadsheet_head(
+    ... dataframe = src,
+    ... survey = 'Census',
+    ... dated = '2013',
+    ... section = 'individual part 1',
+    ... table_name = 'Questions'
+    ... )
+
+    """ 
+    for col in dataframe.columns: 
+        c = list(dataframe.columns).index(col)
         alpha = get_column_letter( int(c) + 1 )
-        stg.rename(columns={col: alpha}, inplace = True) 
-    pvt0 = stg.transpose() 
+        dataframe.rename(columns={col: alpha}, inplace = True) 
+    pvt0 = dataframe.transpose() 
     pvt0.reset_index() 
     pvt0.columns = ['question_text', 'question_text2']  
     pvt0['question_text'] = pvt0['question_text'].ffill(axis=0) 
@@ -432,4 +524,5 @@ def _get_spreadsheet_head(sheet_name:str, file_path:str, skiprows:int, nrows:int
     pvt0['survey_section'] = section
     pvt = pvt0.loc[:,['question_code', 'question_text', 'question_text2', 'survey_name', 'survey_date', 'survey_section']]
     return pvt 
+
     
