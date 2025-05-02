@@ -73,6 +73,7 @@ History
 20250429 -- Add pipelines to integrate helper functions in a sequence to extract from source file to a sink data store
 20250430 -- decompose helper functions into _get and _set, pipe with _put in ingest methods.
 20250501 -- Add simple module logging
+20250502 -- Simplify simple module logging
 
 """
 import os
@@ -95,7 +96,9 @@ PREFIX2 = 'geog_'
 # Logging setup 
 
 LOGDIR = os.getenv('LOGDIR')
-FORMAT='%(asctime)s.%(msecs)03d %(filename)s %(lineno)s %(levelname)s | %(message)s'
+#FORMAT='%(asctime)s.%(msecs)03d %(filename)s %(lineno)s %(levelname)s | %(message)s'
+#FORMAT='[%(asctime)s.%(msecs)03d, %(filename)s, %(lineno)s, %(levelname)s] | %(message)s'
+FORMAT='{ "dated": "%(asctime)s.%(msecs)03d", "filename": "%(filename)s", "line_no": %(lineno)s, "level": "%(levelname)s", "message": %(message)s }'
 DATEFORMAT='%Y-%m-%d %H:%M:%S' 
 BATCH_ID = int(datetime.now(timezone.utc).timestamp() * 1000000)
 
@@ -121,10 +124,12 @@ def log_decorator(_func=None):
     def log_decorator_info(func):
         @functools.wraps(func)
         def log_decorator_wrapper(*args, **kwargs): 
-            msg = {'BATCH': BATCH_ID} 
+            msg = {'batch_id': BATCH_ID} 
             try: 
+                print("-----------------")
+                print(f"function name: {func.__name__}")
                 logger_obj = get_logger(log_file_name=__name__) 
-                msg.update({ 'FUNCTION': func.__name__})
+                msg.update({ 'function': func.__name__})
                 p_args = list()
                 for a in args: 
                     if isinstance(a, pd.DataFrame):  
@@ -135,44 +140,29 @@ def log_decorator(_func=None):
                         p_args.append(repr(a))
                 p_kwargs = [f"{k}={v!r}" for k, v in kwargs.items()]
                 params = ", ".join(p_args + p_kwargs)
-                msg.update({'PARAMS': params })
+                msg.update({'parameters': params })
             except Exception as e:
                 msg.update({'ERROR': e})
                 logger_obj.error(str(msg)) 
                 raise 
             try:
-                results = func(*args, **kwargs)
-                return_type = prettify_return_type(str(results.__class__))
+                result = func(*args, **kwargs)
+                return_type = prettify_return_type(str(result.__class__))
                 returns = {'type': return_type }
-                items_returned = list()
-                item_count = 1
-                is_iterable = False
-                if return_type in ('list', 'tuple'): 
-                    is_iterable = True 
-                if is_iterable: 
-                    item_count = len(results)
-                for i in range(item_count): 
-                    if is_iterable: 
-                        result = results[i]
-                        return_type = prettify_return_type(str(result.__class__))
-                    else: 
-                        result = results
-                    if return_type in ('str', 'int', 'float'):
-                        returns.update({'rows': result})
-                    else: 
-                        try: 
-                            items_returned.append({'type': return_type, 'rows': len(result), 'cols': len(result.columns)})
-                        except: 
-                            returns.update({'rows': len(result)})
-                if is_iterable: 
-                    returns.update({'items': items_returned})
-                msg.update({ 'RETURN': returns }) 
             except Exception as e:
                 msg.update({'ERROR': e})
-                logger_obj.error(str(msg))
-                raise
+                logger_obj.error(str(msg)) 
+                raise 
+            print(result.__class__)
+            if return_type in ('pandas.core.frame.DataFrame', 'geopandas.geodataframe.GeoDataFrame'): 
+                returns.update({'rows': len(result), 'cols': len(result.columns)})
+            elif return_type in ('str', 'int', 'float'): 
+                returns.update({'rows': result})
+            else:
+                returns.update({'rows': -1}) 
+            msg.update({'returns': returns}) 
             logger_obj.info(str(msg)) 
-            return results
+            return result
         return log_decorator_wrapper
     if _func is None:
         return log_decorator_info
